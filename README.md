@@ -6,7 +6,7 @@
 
 A local GUI for remastering public-domain or licensed archive film with ComfyUI models: clean up, stabilise, outpaint to widescreen, colourise from reference stills, add a soundtrack and upscale. You run the whole job from one page, then inspect and adjust any stage where the AI needs steering.
 
-Alpha software. Windows + NVIDIA is the supported path.
+Alpha software. Windows + NVIDIA is the supported path. Apple Silicon Macs have an experimental installer: see [Running ARP on a Mac](docs/macos.md).
 
 <p align="center">
   <img src="assets/screenshots/walkthrough/arp-walkthrough-overview.jpg" alt="ARP Overview tab showing source video metadata, preview frames, and whole-pipeline progress">
@@ -18,6 +18,7 @@ Alpha software. Windows + NVIDIA is the supported path.
 |---|---|
 | **Needs** | Windows, NVIDIA GPU (24 GB recommended, 16 GB minimum), 64 GB RAM recommended, Python 3.13, Git, 150-250 GB free disk |
 | **Install** | `install_windows.bat` (creates `.venv`, local FFmpeg, and a managed ComfyUI in `tools\comfyui`) |
+| **Install on a Mac** | `./install_macos.sh` (Apple Silicon, macOS 14+, Homebrew; pins Python 3.13 itself). See [docs/macos.md](docs/macos.md). |
 | **Launch** | `launch_gui.bat` (macOS/Linux: `./launch_gui.sh`). The GUI starts ComfyUI in its own console if it isn't running. |
 | **Update** | `git pull`, then re-run `install_windows.bat` (keeps models and outputs) |
 | **Models** | Downloaded the first time a stage needs them. Prefetch with `install_windows.bat -DownloadModels`. |

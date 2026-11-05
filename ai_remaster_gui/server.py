@@ -48,7 +48,7 @@ from .manifests import (
     write_manifest_details,
     write_outpaint_chunk_rows,
 )
-from .models import CLEANUP_NEGATIVE_PROMPT, CLEANUP_PROMPT, COLORIZE_STAGE_KEYS, SHOT_STAGE_KEYS, STAGES, Stage, output_stage
+from .models import CLEANUP_NEGATIVE_PROMPT, CLEANUP_PROMPT, COLORIZE_STAGE_KEYS, SHOT_STAGE_KEYS, DEFAULT_SEEDVR2_MODEL, DEFAULT_UPSCALE_METHOD, STAGES, Stage, output_stage
 from .paths import even_int, format_timecode, newest, rel, resolve, resolve_served, resolve_video_source, safe_stem
 from .power import keep_awake, release_keep_awake
 from .naming import manifest_for_outpainted
@@ -2469,7 +2469,7 @@ class PipelineApp:
         add(["--flashvsr-sparse-ratio", values.get("flashvsr_sparse_ratio") or "2.0"])
         add(["--flashvsr-kv-ratio", values.get("flashvsr_kv_ratio") or "3.0"])
         add(["--flashvsr-seed", values.get("flashvsr_seed", "0")])
-        add(["--seedvr2-model", values.get("seedvr2_model", "seedvr2_ema_3b_fp8_e4m3fn.safetensors")])
+        add(["--seedvr2-model", values.get("seedvr2_model", DEFAULT_SEEDVR2_MODEL)])
         add(["--seedvr2-batch-size", values.get("seedvr2_batch_size", "5")])
         add(["--seedvr2-color-correction", values.get("seedvr2_color_correction", "wavelet")])
         add(["--seedvr2-input-noise-scale", values.get("seedvr2_input_noise_scale", "0")])
@@ -3369,13 +3369,13 @@ CQ_FINISH_METHODS = {"flashvsr", "seedvr2", "ltx25", "lanczos", "none"}
 
 
 def upscale_cq_finish(values: dict[str, str]) -> str:
-    finish = values.get("cq_finish", "flashvsr")
-    return finish if finish in CQ_FINISH_METHODS else "flashvsr"
+    finish = values.get("cq_finish", DEFAULT_UPSCALE_METHOD)
+    return finish if finish in CQ_FINISH_METHODS else DEFAULT_UPSCALE_METHOD
 
 
 def upscale_method(values: dict[str, str]) -> str:
-    method = values.get("method", "flashvsr")
-    return method if method in UPSCALE_METHODS else "flashvsr"
+    method = values.get("method", DEFAULT_UPSCALE_METHOD)
+    return method if method in UPSCALE_METHODS else DEFAULT_UPSCALE_METHOD
 
 
 def upscale_backend(values: dict[str, str]) -> str:

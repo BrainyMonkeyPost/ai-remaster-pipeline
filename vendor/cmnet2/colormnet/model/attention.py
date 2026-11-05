@@ -419,7 +419,7 @@ class MultiheadLocalAttentionV2(nn.Module):
         global_attn = torch.zeros(
             (batch_size, self.num_head, height * width, pad_height, pad_width),
             device=local_attn.device)
-        global_attn = global_attn.type(torch.HalfTensor).cuda()
+        global_attn = global_attn.to(dtype=torch.float16)  # ARP: stay on the input's device (CUDA, MPS or CPU)
         global_attn[local_mask.expand(batch_size, self.num_head,
                                       -1, -1, -1)] = local_attn.transpose(
                                           -1, -2).reshape(-1)

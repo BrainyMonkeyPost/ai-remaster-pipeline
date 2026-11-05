@@ -68,10 +68,15 @@ def _sam2_predictor():
             from sam2.sam2_image_predictor import SAM2ImagePredictor
         except ImportError as exc:
             raise RuntimeError(
-                "SAM2 is not installed. Re-run install_windows.bat or install the sam2 package in ARP's Python environment."
+                "SAM2 is not installed. Re-run the installer (install_windows.bat or install_macos.sh) or install the sam2 package in ARP's Python environment."
             ) from exc
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+            device = "mps"  # Apple Silicon GPU
+        else:
+            device = "cpu"
         # from_pretrained uses Hugging Face cache. First use may download the
         # SAM 2.1 Hiera Large weights; later masks reuse the cached checkpoint.
         predictor = SAM2ImagePredictor.from_pretrained(_MODEL_ID, device=device)

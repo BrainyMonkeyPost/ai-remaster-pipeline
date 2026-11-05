@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import shutil
 import subprocess
+import sys
 import time
 
 
@@ -10,6 +11,21 @@ _CACHE: dict[str, object] = {"at": 0.0, "data": {}}
 _CACHE_SECONDS = 5.0
 _CPU_TIMES: tuple[int, int] | None = None
 FLASHVSR_MIN_CUDA_CAPABILITY = (7, 5)
+MAC_FLASHVSR_WARNING = (
+    "FlashVSR needs an NVIDIA GPU and is not available on Apple Silicon. "
+    "Pick SeedVR2 or an LTX 2.5 upscaler in Upscaling, or run that stage on RunPod."
+)
+
+
+def mps_available() -> bool:
+    """Return whether PyTorch can use an Apple Silicon GPU through Metal (MPS)."""
+    try:
+        import torch  # type: ignore
+
+        mps = getattr(torch.backends, "mps", None)
+        return bool(mps is not None and mps.is_available())
+    except Exception:
+        return False
 
 
 class _MemoryStatus(ctypes.Structure):
@@ -57,6 +73,18 @@ def cuda_status() -> dict:
         import torch  # type: ignore
 
         available = bool(torch.cuda.is_available())
+        if not available and mps_available():
+            return {
+                "available": True,
+                "badge": "GPU",
+                "label": "Apple GPU (MPS) available",
+                "detail": f"Apple Silicon GPU through Metal (MPS) - torch {torch.__version__}",
+                "torch": str(torch.__version__),
+                "cuda": "",
+                "capability": "MPS",
+                "flashvsr_supported": False,
+                "warning": MAC_FLASHVSR_WARNING,
+            }
         detail = torch.cuda.get_device_name(0) if available else f"torch {torch.__version__}"
         capability: tuple[int, int] | None = None
         warning = ""
@@ -98,7 +126,7 @@ def flashvsr_hardware_warning(device_detail: str | None = None, capability: tupl
             import torch  # type: ignore
 
             if not torch.cuda.is_available():
-                return ""
+                return MAC_FLASHVSR_WARNING if mps_available() else ""
             capability = tuple(int(part) for part in torch.cuda.get_device_capability(0))
             device_detail = torch.cuda.get_device_name(0)
         except Exception:
@@ -127,7 +155,35 @@ def ram_status() -> dict:
             return memory_payload("RAM", used, total, int(status.dwMemoryLoad))
     except Exception:
         pass
+    if sys.platform == "darwin":
+        mac = mac_ram_status()
+        if mac:
+            return mac
     return {"label": "RAM unknown", "used": None, "total": None, "percent": None, "detail": "RAM status unavailable"}
+
+
+def mac_ram_status() -> dict | None:
+    """Read total and in-use memory on macOS from sysctl and vm_stat."""
+    try:
+        total = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=2, check=True).stdout.strip())
+        output = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=2, check=True).stdout
+        page_size = 16384
+        pages: dict[str, int] = {}
+        for line in output.splitlines():
+            if "page size of" in line:
+                page_size = int(line.split("page size of")[1].split()[0])
+            elif ":" in line:
+                key, value = line.split(":", 1)
+                value = value.strip().rstrip(".")
+                if value.isdigit():
+                    pages[key.strip()] = int(value)
+        # Same idea as Activity Monitor's "Memory Used": app memory + wired + compressed.
+        app = pages.get("Anonymous pages", pages.get("Pages active", 0)) - pages.get("Pages purgeable", 0)
+        used_pages = max(0, app) + pages.get("Pages wired down", 0) + pages.get("Pages occupied by compressor", 0)
+        used = min(total, used_pages * page_size)
+        return memory_payload("RAM", used, total, int(round(used / total * 100)) if total else 0)
+    except Exception:
+        return None
 
 
 def cpu_status() -> dict:
@@ -215,6 +271,13 @@ def torch_vram_status() -> dict:
     try:
         import torch  # type: ignore
 
+        if not torch.cuda.is_available() and mps_available():
+            # Apple Silicon has unified memory: show what PyTorch's Metal driver holds against its limit.
+            used = int(torch.mps.driver_allocated_memory())
+            total = int(torch.mps.recommended_max_memory())
+            payload = memory_payload("GPU mem", used, total, int(round((used / total) * 100)) if total else 0)
+            payload["detail"] = payload["detail"] + " - this process only; ComfyUI runs separately and shares system RAM"
+            return payload
         if not torch.cuda.is_available():
             return {"label": "VRAM unavailable", "used": None, "total": None, "percent": None, "detail": "CUDA is unavailable"}
         free, total = torch.cuda.mem_get_info()

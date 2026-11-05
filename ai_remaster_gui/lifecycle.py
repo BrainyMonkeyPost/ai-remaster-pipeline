@@ -142,6 +142,19 @@ def startup_log(message: str) -> None:
 def comfy_startup_log_path() -> Path:
     return COMFY_STARTUP_LOG
 
+def installer_name() -> str:
+    return "install_macos.sh" if sys.platform == "darwin" else "install_windows.bat"
+
+
+def comfy_environment() -> dict[str, str] | None:
+    """Environment for the ComfyUI process; on macOS let unsupported Metal ops fall back to CPU."""
+    if sys.platform != "darwin":
+        return None
+    env = dict(os.environ)
+    env.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+    return env
+
+
 def tail_text(path: Path, max_lines: int = 80) -> str:
     if not path.exists():
         return ""
@@ -152,8 +165,16 @@ def torch_cuda_warning() -> str:
     try:
         import torch
     except Exception as exc:
-        return f"PyTorch could not be imported from ARP's Python environment: {exc}. Re-run install_windows.bat."
+        return f"PyTorch could not be imported from ARP's Python environment: {exc}. Re-run {installer_name()}."
     version = getattr(torch, "__version__", "unknown")
+    if sys.platform == "darwin":
+        mps = getattr(torch.backends, "mps", None)
+        if mps is not None and mps.is_available():
+            return ""
+        return (
+            f"PyTorch {version} cannot see the Apple Silicon GPU (MPS). ComfyUI will fall back to the CPU and be very slow. "
+            "Check you are on an Apple Silicon Mac with macOS 14 or later, then re-run install_macos.sh."
+        )
     cuda_build = getattr(torch.version, "cuda", None)
     if not cuda_build:
         return f"ARP's Python environment has a CPU-only PyTorch build ({version}). Re-run install_windows.bat so it can install CUDA PyTorch."
@@ -226,10 +247,10 @@ def start_comfy_if_needed(monitor: bool = True) -> bool:
     if not main_py.exists():
         if CONFIG_FILE.exists():
             startup_log(f"ComfyUI is configured but main.py was not found: {main_py}")
-            startup_log("Run install_windows.bat again and choose your ComfyUI directory.")
+            startup_log(f"Run {installer_name()} again and choose your ComfyUI directory.")
         else:
             startup_log("ComfyUI is not configured yet.")
-            startup_log("Run install_windows.bat again and choose whether to clone ComfyUI or use an existing ComfyUI directory.")
+            startup_log(f"Run {installer_name()} again and choose whether to clone ComfyUI or use an existing ComfyUI directory.")
         return False
     host = config.get("comfy_host", "127.0.0.1")
     port = str(config.get("comfy_port", "8188"))
@@ -254,6 +275,9 @@ def start_comfy_if_needed(monitor: bool = True) -> bool:
     # launch command for the GUI's log-file viewer. CREATE_NEW_PROCESS_GROUP scopes our taskkill to
     # that tree on shutdown.
     kwargs: dict = {"cwd": str(comfy_dir)}
+    env = comfy_environment()
+    if env is not None:
+        kwargs["env"] = env
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP
     else:

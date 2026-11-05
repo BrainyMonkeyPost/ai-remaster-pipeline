@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import sys
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
@@ -57,7 +58,7 @@ CQ_FINISH_METHODS = ("flashvsr", "seedvr2", "ltx25", "lanczos", "none")
 # The CQ LoRA was trained on 30 fps clips; its author warns other rates cause artefacts.
 CQ_FPS = 30.0
 CQ_DISTILLED_LORA_STRENGTH = 0.5
-DEFAULT_SEEDVR2_MODEL = "seedvr2_ema_3b_fp8_e4m3fn.safetensors"
+DEFAULT_SEEDVR2_MODEL = "seedvr2_ema_3b_fp16.safetensors" if sys.platform == "darwin" else "seedvr2_ema_3b_fp8_e4m3fn.safetensors"
 CURRENT_INTERMEDIATE_PROFILE = "high"
 
 

@@ -779,7 +779,7 @@ class GuiSmokeTests(unittest.TestCase):
         frame = np.clip(128.0 * field[:, :, None], 0, 255)
         frame = np.repeat(frame, 3, axis=2).astype(np.uint8)
         profile, _ratio = cleanup_video.vignette_profile([frame] * 4)
-        processor = cleanup_video.TorchDeVignetteProcessor(width, height, profile, "cuda")
+        processor = cleanup_video.TorchDeVignetteProcessor(width, height, profile, cleanup_video.TorchDeVignetteProcessor.best_device())
 
         repaired = processor.process([frame, frame])
         centre = radius < 0.25

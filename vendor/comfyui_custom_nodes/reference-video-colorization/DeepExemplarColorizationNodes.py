@@ -38,6 +38,10 @@ from tqdm import tqdm as console_tqdm
 
 # Import ComfyUI's internal ProgressBar for GUI progress updates.
 from comfy.utils import ProgressBar
+import comfy.model_management as _mm
+
+# ARP: run on ComfyUI's chosen device (CUDA, Apple MPS or CPU) instead of hard-coded CUDA.
+_DEVICE = _mm.get_torch_device()
 
 from .utils.util_distortion import CenterPad, Normalize, RGB2Lab, ToTensor
 from .utils.util import batch_lab2rgb_transpose_mc, uncenter_l, tensor_lab2rgb
@@ -237,12 +241,12 @@ def load_models_if_needed():
         raise FileNotFoundError(f"VGG19 model not found and download failed: {vgg_ckpt}")
     from .models.NonlocalNet import WarpNet, VGG19_pytorch
     from .models.ColorVidNet import ColorVidNet
-    NONLOCAL_NET = WarpNet(1).cuda().eval()
-    COLOR_NET = ColorVidNet(7).cuda().eval()
-    VGG_NET = VGG19_pytorch().cuda().eval()
-    NONLOCAL_NET.load_state_dict(torch.load(nonlocal_ckpt, map_location="cuda"))
-    COLOR_NET.load_state_dict(torch.load(color_ckpt, map_location="cuda"))
-    VGG_NET.load_state_dict(torch.load(vgg_ckpt, map_location="cuda"))
+    NONLOCAL_NET = WarpNet(1).to(_DEVICE).eval()
+    COLOR_NET = ColorVidNet(7).to(_DEVICE).eval()
+    VGG_NET = VGG19_pytorch().to(_DEVICE).eval()
+    NONLOCAL_NET.load_state_dict(torch.load(nonlocal_ckpt, map_location=_DEVICE))
+    COLOR_NET.load_state_dict(torch.load(color_ckpt, map_location=_DEVICE))
+    VGG_NET.load_state_dict(torch.load(vgg_ckpt, map_location=_DEVICE))
     MODELS_LOADED = True
     print("[DeepExemplar] Models loaded successfully.")
 
@@ -381,8 +385,8 @@ class DeepExColorImageNode:
         transform = build_test_py_transform((final_h, final_w))
         src_pil = tensor_to_pil(image_to_colorize)
         ref_pil = tensor_to_pil(reference_image)
-        src_lab_full = transform(src_pil).unsqueeze(0).cuda()
-        ref_lab_full = transform(ref_pil).unsqueeze(0).cuda()
+        src_lab_full = transform(src_pil).unsqueeze(0).to(_DEVICE)
+        ref_lab_full = transform(ref_pil).unsqueeze(0).to(_DEVICE)
         src_half = F.interpolate(src_lab_full, scale_factor=0.5, mode="bilinear", align_corners=False)
         ref_half = F.interpolate(ref_lab_full, scale_factor=0.5, mode="bilinear", align_corners=False)
         I_ref_l = ref_half[:, 0:1, :, :]
@@ -538,7 +542,7 @@ class DeepExColorVideoNode:
         print(f"[DeepExColorVideoNode] Number of frames: {len(frames_list)}")
         transform = build_test_py_transform((final_h, final_w))
         ref_pil = tensor_to_pil(reference_image)
-        ref_lab_full = transform(ref_pil).unsqueeze(0).cuda()
+        ref_lab_full = transform(ref_pil).unsqueeze(0).to(_DEVICE)
         if use_half_resolution:
             ref_half = F.interpolate(ref_lab_full, scale_factor=0.5, mode="bilinear", align_corners=False)
         else:
@@ -559,7 +563,7 @@ class DeepExColorVideoNode:
 
         for i, frm in enumerate(frames_list):
             frame_pil = tensor_to_pil(frm)
-            frm_lab_full = transform(frame_pil).unsqueeze(0).cuda()
+            frm_lab_full = transform(frame_pil).unsqueeze(0).to(_DEVICE)
             if use_half_resolution:
                 frm_half = F.interpolate(frm_lab_full, scale_factor=0.5, mode="bilinear", align_corners=False)
             else:

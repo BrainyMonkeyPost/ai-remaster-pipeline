@@ -37,6 +37,13 @@ if [ "$COMMIT" = "unknown" ]; then
 else
   printf 'ARP %s-%s\n' "$VERSION" "$COMMIT"
 fi
+if [ "$(uname -s)" = "Darwin" ]; then
+  # Finder-launched shells miss Homebrew's PATH; ARP also keeps its FFmpeg links here.
+  PATH="$ROOT/.cache/tools/ffmpeg:/opt/homebrew/bin:/usr/local/bin:$PATH"
+  export PATH
+  # Let ComfyUI fall back to the CPU for the few PyTorch ops Metal (MPS) lacks.
+  export PYTORCH_ENABLE_MPS_FALLBACK="${PYTORCH_ENABLE_MPS_FALLBACK:-1}"
+fi
 if [ -x "$ROOT/.venv/bin/python" ]; then
   PY="$ROOT/.venv/bin/python"
 else

@@ -25,6 +25,38 @@ from PIL import Image
 import numpy as np
 import math
 
+
+# ARP: pick CUDA, then Apple Silicon MPS, then CPU, instead of hard-coding CUDA.
+def _select_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+DEVICE = _select_device()
+
+
+def _empty_cache() -> None:
+    if DEVICE.type == "cuda":
+        _empty_cache()
+    elif DEVICE.type == "mps":
+        torch.mps.empty_cache()
+
+
+def _free_memory_bytes() -> float:
+    if DEVICE.type == "cuda":
+        return torch.cuda.mem_get_info()[0]
+    if DEVICE.type == "mps":
+        try:
+            return float(torch.mps.recommended_max_memory() - torch.mps.driver_allocated_memory())
+        except Exception:
+            return float("inf")
+    return float("inf")
+
+
 from colormnet.dataset.range_transform import im_normalization, im_rgb2lab_normalization, ToTensor, RGB2Lab
 from colormnet.model.network import ColorMNet
 from colormnet.inference.inference_core import InferenceCore
@@ -155,8 +187,8 @@ class ColorMNetRender:
         torch.autograd.set_grad_enabled(False)
 
         # Model setup
-        self.network = ColorMNet(self.config, self.config['model']).cuda().eval()
-        self.model_weights = torch.load(self.config['model'])
+        self.network = ColorMNet(self.config, self.config['model']).to(DEVICE).eval()
+        self.model_weights = torch.load(self.config['model'], map_location=DEVICE)
         self.network.load_weights(self.model_weights, init_as_zero_if_needed=True)
         self.vid_length = vid_length
         self.config['enable_long_term_count_usage'] = (
@@ -193,8 +225,8 @@ class ColorMNetRender:
 
         img = self.im_transform(ref_img)
         img_l = img[:1, :, :]
-        img_lll = img_l.repeat(3, 1, 1).cuda()
-        img_ab = img[1:3, :, :].cuda()
+        img_lll = img_l.repeat(3, 1, 1).to(DEVICE)
+        img_ab = img[1:3, :, :].to(DEVICE)
 
         if self.processor.all_labels is None:
             self.processor.set_all_labels(list(range(1, 3)))
@@ -252,7 +284,7 @@ class ColorMNetRender:
 
         self.total_colored_frames += 1
 
-        gpu_mem_free, gpu_mem_total = torch.cuda.mem_get_info()
+        gpu_mem_free = _free_memory_bytes()
         gpu_mem_k = round(gpu_mem_free / 1024 / 1024, 1)
         # vs.core.log_message(vs.MESSAGE_TYPE_WARNING, "CUDA free memory: " + str(gpu_mem_k) + " MB")
         reset_cond_1 = (gpu_mem_k < 100)
@@ -269,7 +301,7 @@ class ColorMNetRender:
             self.frame_count = 0
             del self.processor
             gc.collect()
-            torch.cuda.empty_cache()
+            _empty_cache()
             self.config['FirstFrameIsNotExemplar'] = True  # because the reference image is the previous colored frame
             self.processor = InferenceCore(self.network, config=self.config)
             data = self.get_image(ti, frame_i, self.ref_img_valid)
@@ -278,11 +310,11 @@ class ColorMNetRender:
                 # VRAM below threshold: aggressive slide of 70% of perm_mem
                 n = int(self.get_perm_mem_frame_count() * 0.7)
                 self.slide_permanent_memory(n)
-                torch.cuda.empty_cache()
+                _empty_cache()
             data = self.get_image(ti, frame_i, self.ref_img)
             self.frame_count += 1
 
-        rgb = data['rgb'].cuda()[0]
+        rgb = data['rgb'].to(DEVICE)[0]
 
         msk = data.get('mask')
         if not self.config['FirstFrameIsNotExemplar']:
@@ -302,7 +334,7 @@ class ColorMNetRender:
 
         # Map possibly non-continuous labels to continuous ones
         if msk is not None:
-            msk = torch.Tensor(msk[0]).cuda()
+            msk = torch.Tensor(msk[0]).to(DEVICE)
             if need_resize:
                 msk = self.resize_mask(msk.unsqueeze(0))[0]
             self.processor.set_all_labels(list(range(1, 3)))
@@ -336,7 +368,7 @@ class ColorMNetRender:
         self.save_last_image(out_pil_img)
 
         # empty torch cache
-        torch.cuda.empty_cache()
+        _empty_cache()
 
         return out_pil_img
 

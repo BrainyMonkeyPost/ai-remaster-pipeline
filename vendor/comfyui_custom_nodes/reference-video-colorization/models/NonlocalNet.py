@@ -130,7 +130,7 @@ class CorrelationLayer(nn.Module):
     def forward(self, x1, x2, alpha=1, raw_output=False, metric="similarity"):
         shape = list(x1.size())
         shape[1] = (self.search_range * 2 + 1) ** 2
-        cv = torch.zeros(shape).to(torch.device("cuda"))
+        cv = torch.zeros(shape, device=x1.device)  # ARP: follow the input device
 
         for i in range(-self.search_range, self.search_range + 1):
             for j in range(-self.search_range, self.search_range + 1):
@@ -305,7 +305,9 @@ class VGG19_feature(nn.Module):
     # input: [LLL] channels, range=[0,255]
     def __init__(self, gpu_ids):
         super(VGG19_feature, self).__init__()
-        self.vgg19_gray = vgg19_gray().cuda()
+        device = torch.device("cuda") if torch.cuda.is_available() else (
+            torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu"))  # ARP
+        self.vgg19_gray = vgg19_gray().to(device)
 
     def forward(self, A_l, B_l):
         A_relu3_1, A_relu4_1, A_relu5_1 = self.vgg19_gray(A_l)

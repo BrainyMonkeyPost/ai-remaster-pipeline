@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 
 from .config import OUTPAINT_PROMPT, REFERENCE_PROMPT, REFERENCE_PROMPT_SUFFIX
+
+# FlashVSR needs NVIDIA (Triton/CUDA kernels) and fp8 weights are poorly supported on Apple's
+# Metal backend, so Macs default to SeedVR2 with fp16 weights.
+IS_MAC = sys.platform == "darwin"
+DEFAULT_UPSCALE_METHOD = "seedvr2" if IS_MAC else "flashvsr"
+DEFAULT_SEEDVR2_MODEL = "seedvr2_ema_3b_fp16.safetensors" if IS_MAC else "seedvr2_ema_3b_fp8_e4m3fn.safetensors"
 
 SHOT_STAGE_KEYS = {"shots"}
 COLORIZE_STAGE_KEYS = {"references", "colour"}
@@ -245,7 +252,7 @@ STAGES = (
             ("target_width", "Target width", "number", "3840"),
             ("target_height", "Target height", "number", "2160"),
             ("output", "Upscaled output", "save", ""),
-            ("method", "Upscale method", "select:flashvsr|seedvr2|ltx25|ltx25cq", "flashvsr"),
+            ("method", "Upscale method", "select:flashvsr|seedvr2|ltx25|ltx25cq", DEFAULT_UPSCALE_METHOD),
             ("flashvsr_model", "FlashVSR model", "select:FlashVSR|FlashVSR-v1.1", "FlashVSR-v1.1"),
             ("flashvsr_mode", "FlashVSR mode", "select:tiny|tiny-long|full", "tiny"),
             ("flashvsr_scale", "FlashVSR scale", "select:2|3|4", "2"),
@@ -261,7 +268,7 @@ STAGES = (
             ("flashvsr_tiled_vae", "Tiled decode (tiled_vae)", "checkbox", "true"),
             ("flashvsr_unload_dit", "Unload before decode (unload_dit)", "checkbox", "false"),
             ("flashvsr_seed", "FlashVSR seed", "number", "0"),
-            ("seedvr2_model", "SeedVR2 model", "select:seedvr2_ema_3b_fp8_e4m3fn.safetensors|seedvr2_ema_3b-Q4_K_M.gguf|seedvr2_ema_3b_fp16.safetensors|seedvr2_ema_7b-Q4_K_M.gguf|seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors|seedvr2_ema_7b_fp16.safetensors|seedvr2_ema_7b_sharp-Q4_K_M.gguf|seedvr2_ema_7b_sharp_fp8_e4m3fn_mixed_block35_fp16.safetensors|seedvr2_ema_7b_sharp_fp16.safetensors", "seedvr2_ema_3b_fp8_e4m3fn.safetensors"),
+            ("seedvr2_model", "SeedVR2 model", "select:seedvr2_ema_3b_fp8_e4m3fn.safetensors|seedvr2_ema_3b-Q4_K_M.gguf|seedvr2_ema_3b_fp16.safetensors|seedvr2_ema_7b-Q4_K_M.gguf|seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors|seedvr2_ema_7b_fp16.safetensors|seedvr2_ema_7b_sharp-Q4_K_M.gguf|seedvr2_ema_7b_sharp_fp8_e4m3fn_mixed_block35_fp16.safetensors|seedvr2_ema_7b_sharp_fp16.safetensors", DEFAULT_SEEDVR2_MODEL),
             ("seedvr2_batch_size", "SeedVR2 batch size", "select:1|5|9|13|17|21", "5"),
             ("seedvr2_color_correction", "SeedVR2 color correction", "select:wavelet|adain|none", "wavelet"),
             ("seedvr2_input_noise_scale", "Input noise", "range:0|1|0.01", "0"),
@@ -280,7 +287,7 @@ STAGES = (
             ("ltx25_seed", "LTX 2.5 seed", "number", "42"),
             ("ltx25_prompt", "LTX 2.5 upscale prompt", "text", LTX25_UPSCALE_PROMPT),
             ("ltx25_negative_prompt", "LTX 2.5 negative prompt", "text", LTX25_UPSCALE_NEGATIVE_PROMPT),
-            ("cq_finish", "Then upscale with", "select:flashvsr|seedvr2|ltx25|lanczos|none", "flashvsr"),
+            ("cq_finish", "Then upscale with", "select:flashvsr|seedvr2|ltx25|lanczos|none", DEFAULT_UPSCALE_METHOD),
             ("cq_base", "CQ base model", "select:distilled|dev", "distilled"),
             ("cq_short_edge", "CQ working short edge (px)", "number", "720"),
             ("cq_frame_rate", "CQ frame-rate handling", "select:resample|retime", "resample"),

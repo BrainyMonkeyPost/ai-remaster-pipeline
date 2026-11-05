@@ -66,15 +66,19 @@ class CMNet2Session:
             from colormnet.colormnet_render import ColorMNetRender
         except ImportError as exc:
             raise RuntimeError(
-                "CMNET2 dependencies are missing. Rerun install_windows.bat to install PyTorch, torchvision, "
+                "CMNET2 dependencies are missing. Rerun the installer (install_windows.bat or install_macos.sh) to install PyTorch, torchvision, "
                 "OpenCV, Pillow, scikit-image, einops and tqdm."
             ) from exc
 
         hub_dir = runtime_dir / "models"
         if hub_dir.is_dir():
             torch.hub.set_dir(str(hub_dir))
-        if not torch.cuda.is_available():
-            raise RuntimeError("CMNET2 requires a CUDA-capable NVIDIA GPU, but PyTorch cannot access CUDA.")
+        mps = getattr(torch.backends, "mps", None)
+        if not torch.cuda.is_available() and not (mps is not None and mps.is_available()):
+            raise RuntimeError(
+                "CMNET2 needs a GPU: an NVIDIA card with CUDA, or an Apple Silicon Mac (MPS). "
+                "PyTorch can access neither here."
+            )
 
         torch.backends.cudnn.benchmark = True
         torch.set_grad_enabled(False)

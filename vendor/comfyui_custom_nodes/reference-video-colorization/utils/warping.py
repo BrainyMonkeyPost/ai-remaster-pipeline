@@ -10,7 +10,7 @@ def get_grid(x):
     torchVertical = (
         torch.linspace(-1.0, 1.0, x.size(2)).view(1, 1, x.size(2), 1).expand(x.size(0), 1, x.size(2), x.size(3))
     )
-    return torch.cat([torchHorizontal, torchVertical], 1).cuda()
+    return torch.cat([torchHorizontal, torchVertical], 1).to(x.device)  # ARP: follow the input device
 
 
 class WarpingLayer(nn.Module):
@@ -22,7 +22,7 @@ class WarpingLayer(nn.Module):
         # WarpingLayer uses F.grid_sample, which expects normalized grid
         # we still output unnormalized flow for the convenience of comparing EPEs with FlowNet2 and original code
         # so here we need to denormalize the flow
-        flow_for_grip = torch.zeros_like(flow).cuda()
+        flow_for_grip = torch.zeros_like(flow)  # ARP: same device as flow
         flow_for_grip[:, 0, :, :] = flow[:, 0, :, :] / ((flow.size(3) - 1.0) / 2.0)
         flow_for_grip[:, 1, :, :] = flow[:, 1, :, :] / ((flow.size(2) - 1.0) / 2.0)
 

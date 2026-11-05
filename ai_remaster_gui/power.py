@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import ctypes
 import os
+import shutil
+import subprocess
+import sys
 import threading
 
 
@@ -14,6 +17,20 @@ _condition = threading.Condition(_lock)
 _count = 0
 _worker: threading.Thread | None = None
 _REFRESH_SECONDS = 30.0
+_caffeinate: subprocess.Popen | None = None
+
+
+def _mac_keep_awake(active: bool) -> None:
+    """On macOS, hold a `caffeinate -i` process open while ARP is busy so the Mac doesn't sleep."""
+    global _caffeinate
+    if active:
+        if _caffeinate is None or _caffeinate.poll() is not None:
+            exe = shutil.which("caffeinate")
+            if exe:
+                _caffeinate = subprocess.Popen([exe, "-i", "-w", str(os.getpid())])
+    elif _caffeinate is not None:
+        _caffeinate.terminate()
+        _caffeinate = None
 
 
 def _set_execution_state(flags: int) -> bool:
@@ -60,6 +77,11 @@ def _ensure_worker_locked() -> None:
 def keep_awake(reason: str = "") -> None:
     """Prevent Windows system sleep while ARP has an active long-running process."""
     global _count
+    if sys.platform == "darwin":
+        with _lock:
+            _count += 1
+            _mac_keep_awake(True)
+        return
     if os.name != "nt":
         return
     with _lock:
@@ -70,6 +92,13 @@ def keep_awake(reason: str = "") -> None:
 
 def release_keep_awake() -> None:
     global _count
+    if sys.platform == "darwin":
+        with _lock:
+            if _count > 0:
+                _count -= 1
+            if _count == 0:
+                _mac_keep_awake(False)
+        return
     if os.name != "nt":
         return
     with _lock:

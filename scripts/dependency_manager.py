@@ -228,11 +228,18 @@ def ensure_ffmpeg_tools() -> tuple[Path, Path]:
     if ffmpeg.exists() and ffprobe.exists():
         return ffmpeg, ffprobe
     if os.name != "nt":
+        # install_macos.sh links Homebrew's FFmpeg here; otherwise fall back to PATH.
+        linked_ffmpeg, linked_ffprobe = tool_dir / "ffmpeg", tool_dir / "ffprobe"
+        if linked_ffmpeg.exists() and linked_ffprobe.exists():
+            return linked_ffmpeg, linked_ffprobe
         found_ffmpeg = shutil.which("ffmpeg")
         found_ffprobe = shutil.which("ffprobe")
         if found_ffmpeg and found_ffprobe:
             return Path(found_ffmpeg), Path(found_ffprobe)
-        raise FileNotFoundError("ffmpeg/ffprobe were not found. Automatic FFmpeg download is currently implemented for Windows.")
+        raise FileNotFoundError(
+            "ffmpeg/ffprobe were not found. On macOS run install_macos.sh (or 'brew install ffmpeg'); "
+            "automatic FFmpeg download is only implemented for Windows."
+        )
 
     archive = ROOT / ".cache" / "downloads" / "ffmpeg-release-essentials.zip"
     archive.parent.mkdir(parents=True, exist_ok=True)

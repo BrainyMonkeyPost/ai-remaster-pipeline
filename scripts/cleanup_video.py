@@ -277,7 +277,7 @@ def apply_vignette_correction(frame: Any, profile: Any | None) -> Any:
 
 
 class TorchDeVignetteProcessor:
-    """Batched CUDA implementation of the DeVignette correction."""
+    """Batched PyTorch GPU (CUDA or Apple MPS) implementation of the DeVignette correction."""
 
     def __init__(
         self,
@@ -309,20 +309,40 @@ class TorchDeVignetteProcessor:
             self.active_bounds = (left, top, right, bottom)
 
     @classmethod
+    def best_device(cls) -> str | None:
+        """Return the GPU device PyTorch can use here: "cuda", "mps" (Apple Silicon) or None."""
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                return "cuda"
+            mps = getattr(torch.backends, "mps", None)
+            if mps is not None and mps.is_available():
+                return "mps"
+        except Exception:
+            pass
+        return None
+
+    @classmethod
     def available(cls) -> tuple[bool, str]:
         try:
             import torch
 
-            if not torch.cuda.is_available():
-                return False, "PyTorch is installed but CUDA is not available"
-            return True, torch.cuda.get_device_name(0)
+            if torch.cuda.is_available():
+                return True, torch.cuda.get_device_name(0)
+            if cls.best_device() == "mps":
+                return True, "Apple Silicon GPU (MPS)"
+            return False, "PyTorch is installed but no CUDA or Apple MPS GPU is available"
         except Exception as exc:
-            return False, f"PyTorch CUDA could not be loaded: {exc}"
+            return False, f"PyTorch GPU support could not be loaded: {exc}"
 
     def suggested_batch_size(self) -> int:
         torch = self.torch
         pixels = self.width * self.height
         cap = 8 if pixels <= 1_000_000 else 4 if pixels <= 2_500_000 else 1
+        if self.device.type != "cuda":
+            # Apple Silicon shares system memory with the GPU, so a fixed batch is safe.
+            return max(1, min(cap, 4))
         try:
             free_bytes, _total_bytes = torch.cuda.mem_get_info(self.device)
             per_frame = max(1, pixels * 4 * 8)
@@ -467,21 +487,26 @@ def prepare_devignette(
     gpu_processor: TorchDeVignetteProcessor | None = None
     batch_size = 1
     available, gpu_detail = (False, "not requested")
-    if requested_device in {"auto", "cuda"}:
+    gpu_device = TorchDeVignetteProcessor.best_device() if requested_device in {"auto", "cuda", "mps"} else None
+    if requested_device in {"auto", "cuda", "mps"}:
         available, gpu_detail = TorchDeVignetteProcessor.available()
-    if requested_device in {"auto", "cuda"} and available:
+    if requested_device in {"cuda", "mps"} and gpu_device != requested_device:
+        available = False
+        gpu_detail = f"{requested_device} requested, but this machine offers {gpu_device or 'no GPU'}"
+    if requested_device in {"auto", "cuda", "mps"} and available and gpu_device:
+        label = gpu_device.upper()
         try:
-            gpu_processor = TorchDeVignetteProcessor(width, height, profile, device="cuda")
+            gpu_processor = TorchDeVignetteProcessor(width, height, profile, device=gpu_device)
             batch_size = gpu_processor.suggested_batch_size()
             print(
-                f"DeVignette processor: CUDA on {gpu_detail}; adaptive batch size {batch_size}. "
-                "This uses ARP's PyTorch CUDA stack directly (the same GPU stack used by ComfyUI).",
+                f"DeVignette processor: {label} on {gpu_detail}; adaptive batch size {batch_size}. "
+                "This uses ARP's PyTorch GPU stack directly (the same GPU stack used by ComfyUI).",
                 flush=True,
             )
         except Exception as exc:
-            print(f"WARNING: CUDA DeVignette could not initialize ({exc}); falling back to CPU.", flush=True)
-    elif requested_device == "cuda":
-        print(f"WARNING: CUDA DeVignette requested but unavailable ({gpu_detail}); falling back to CPU.", flush=True)
+            print(f"WARNING: {label} DeVignette could not initialize ({exc}); falling back to CPU.", flush=True)
+    elif requested_device in {"cuda", "mps"}:
+        print(f"WARNING: GPU DeVignette requested but unavailable ({gpu_detail}); falling back to CPU.", flush=True)
     if gpu_processor is None:
         print("DeVignette processor: CPU (OpenCV/NumPy), one frame at a time.", flush=True)
 
@@ -524,10 +549,13 @@ def prepare_devignette(
                     if "out of memory" not in str(exc).lower():
                         raise
                     print(
-                        "WARNING: CUDA ran out of memory; clearing its cache and continuing on CPU.",
+                        "WARNING: The GPU ran out of memory; clearing its cache and continuing on CPU.",
                         flush=True,
                     )
-                    gpu_processor.torch.cuda.empty_cache()
+                    if gpu_processor.device.type == "cuda":
+                        gpu_processor.torch.cuda.empty_cache()
+                    elif gpu_processor.device.type == "mps":
+                        gpu_processor.torch.mps.empty_cache()
                     gpu_processor = None
                     batch_size = 1
                     repaired_batch = source_batch
@@ -1378,9 +1406,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--devignette", action="store_true", help="Automatically correct a stable light or dark vignette before Dearchive.")
     parser.add_argument(
         "--repair-device",
-        choices=["auto", "cuda", "cpu"],
+        choices=["auto", "cuda", "mps", "cpu"],
         default="auto",
-        help="Processor for DeVignette. Auto prefers PyTorch CUDA and falls back to CPU.",
+        help="Processor for DeVignette. Auto prefers PyTorch CUDA, then Apple MPS, and falls back to CPU.",
     )
     dearchive_group = parser.add_mutually_exclusive_group()
     dearchive_group.add_argument("--dearchive", dest="dearchive", action="store_true", help="Run the Dearchive LoRA (default).")

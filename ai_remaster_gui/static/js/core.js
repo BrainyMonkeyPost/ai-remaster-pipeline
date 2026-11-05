@@ -151,7 +151,7 @@ function updateSystemStatus() {
   const vram = status.vram || {};
   const cudaTone = cuda.available ? (cuda.warning ? 'warn' : 'ok') : 'bad';
   const badges = [
-    statusBadge('CUDA', cuda.capability || (cuda.available ? 'Yes' : 'No'), cudaTone, statusDetail(cuda)),
+    statusBadge(cuda.badge || 'CUDA', cuda.capability || (cuda.available ? 'Yes' : 'No'), cudaTone, statusDetail(cuda)),
     utilizationBadge(cpu, 'CPU'),
     utilizationBadge(gpu, 'GPU'),
     memoryBadge(ram),
