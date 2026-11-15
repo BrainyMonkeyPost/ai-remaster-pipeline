@@ -194,7 +194,14 @@ def is_windows() -> bool:
 
 def ffprobe_for(ffmpeg: str) -> str:
     path = Path(ffmpeg)
-    return str(path.with_name("ffprobe.exe")) if path.suffix.lower() == ".exe" else "ffprobe"
+    if path.suffix.lower() == ".exe":
+        return str(path.with_name("ffprobe.exe"))
+    # Use the ffprobe that sits beside the chosen ffmpeg (e.g. ARP's .cache/tools/ffmpeg links on
+    # macOS), so it works even when Homebrew's bin folder is not on PATH.
+    sibling = path.with_name("ffprobe")
+    if path.parent != Path(".") and sibling.exists():
+        return str(sibling)
+    return "ffprobe"
 
 
 def find_ffmpeg(explicit: str | None = None) -> str:

@@ -88,9 +88,12 @@ done
 
 # ARP's Stabilization stage needs vid.stab, and intermediates use VP9 (libvpx).
 ffmpeg_ok() {
-  local bin="$1"
-  "$bin" -hide_banner -filters 2>/dev/null | grep -q vidstabdetect &&
-    "$bin" -hide_banner -encoders 2>/dev/null | grep -q libvpx-vp9
+  # Capture first: piping into `grep -q` makes ffmpeg exit with SIGPIPE, which
+  # `set -o pipefail` turns into a failure even on a good build.
+  local bin="$1" filters encoders
+  filters="$("$bin" -hide_banner -filters 2>/dev/null || true)"
+  encoders="$("$bin" -hide_banner -encoders 2>/dev/null || true)"
+  [[ "$filters" == *vidstabdetect* && "$encoders" == *libvpx-vp9* ]]
 }
 FFMPEG_BIN="$(command -v ffmpeg || true)"
 if [ -z "$FFMPEG_BIN" ] || ! ffmpeg_ok "$FFMPEG_BIN"; then
@@ -172,7 +175,8 @@ step "Installing ARP Python requirements"
 # SAM2 tries to compile a CUDA extension; tell it not to.
 export SAM2_BUILD_CUDA=0
 pip_install -r "$ROOT/requirements.txt"
-pip_install "huggingface_hub[cli]" opencv-contrib-python imageio-ffmpeg pillow numpy numba scikit-image einops tqdm matplotlib
+# httpx: dependency_manager.py imports it, and newer huggingface_hub no longer pulls it in.
+pip_install "huggingface_hub[cli]" httpx opencv-contrib-python imageio-ffmpeg pillow numpy numba scikit-image einops tqdm matplotlib
 
 # --------------------------------------------------------------------------
 step "Installing ComfyUI"

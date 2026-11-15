@@ -16,6 +16,7 @@ from comfy_api import ensure_arp_ltx_compatible, extract_output_files, ensure_no
 from common import (
     QWEN_IMAGE_EDIT_MODEL,
     ROOT,
+    ffprobe_for,
     copy_to_comfy_input,
     file_fingerprint,
     find_ffmpeg,
@@ -373,7 +374,7 @@ def prepare_ltx25_frame_rate(ffmpeg: str, prepared: Path, mode: str, force: bool
 
 def video_has_audio(ffmpeg: str, source: Path) -> bool:
     ffmpeg_path = Path(ffmpeg)
-    ffprobe = str(ffmpeg_path.with_name("ffprobe.exe")) if ffmpeg_path.suffix.lower() == ".exe" else "ffprobe"
+    ffprobe = ffprobe_for(str(ffmpeg_path))
     try:
         result = subprocess.run(
             [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=index", "-of", "json", str(source)],

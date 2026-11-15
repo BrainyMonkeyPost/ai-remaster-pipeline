@@ -692,6 +692,23 @@ def seedvr2_generation_resolution(output_width: int, output_height: int) -> int:
     return max(16, int(round(min(output_width, output_height) / 16.0)) * 16)
 
 
+def seedvr2_offload_choice(info: dict[str, Any], node_type: str, wanted: str) -> str:
+    """Return `wanted` if the installed node accepts it, else "none".
+
+    SeedVR2 only lists the devices it can see; on macOS that is ["none", "mps"], with no "cpu".
+    """
+    node = info.get(node_type) or {}
+    inputs = node.get("input") or {}
+    for group in ("required", "optional"):
+        spec = (inputs.get(group) or {}).get("offload_device")
+        if isinstance(spec, (list, tuple)) and spec and isinstance(spec[0], (list, tuple)):
+            choices = [str(choice) for choice in spec[0]]
+            if wanted in choices:
+                return wanted
+            return "none" if "none" in choices else (choices[0] if choices else wanted)
+    return wanted
+
+
 def seedvr2_prompt(
     video_name: str,
     fps: float,
@@ -712,7 +729,7 @@ def seedvr2_prompt(
             "model": args.seedvr2_model,
             "blocks_to_swap": int(args.seedvr2_blocks_to_swap),
             "swap_io_components": bool(args.seedvr2_offload_io_components),
-            "offload_device": dit_offload,
+            "offload_device": seedvr2_offload_choice(info, "SeedVR2LoadDiTModel", dit_offload),
             "cache_model": cache_model,
             "attention_mode": "sdpa",
         }
@@ -724,7 +741,7 @@ def seedvr2_prompt(
             "decode_tile_size": int(args.seedvr2_vae_tile_size),
             "decode_tile_overlap": int(args.seedvr2_vae_tile_overlap),
             "tile_debug": "false",
-            "offload_device": vae_offload,
+            "offload_device": seedvr2_offload_choice(info, "SeedVR2LoadVAEModel", vae_offload),
             "cache_model": cache_model,
         }
         upscale_values = {
@@ -738,7 +755,7 @@ def seedvr2_prompt(
             "color_correction": args.seedvr2_color_correction,
             "input_noise_scale": float(args.seedvr2_input_noise_scale),
             "latent_noise_scale": float(args.seedvr2_latent_noise_scale),
-            "offload_device": "cpu" if preserve_vram else "none",
+            "offload_device": seedvr2_offload_choice(info, "SeedVR2VideoUpscaler", "cpu" if preserve_vram else "none"),
             "enable_debug": False,
         }
         return {

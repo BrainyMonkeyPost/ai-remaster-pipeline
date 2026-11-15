@@ -8,7 +8,7 @@ from pathlib import Path
 
 import chunk_plan
 import frame_masks
-from common import ROOT, file_fingerprint, resolve_path, root_relative, resumable_output, safe_stem, write_signature
+from common import ROOT, ffprobe_for, file_fingerprint, resolve_path, root_relative, resumable_output, safe_stem, write_signature
 from outpaint_geometry import crop_box, native_source_layout, source_placement
 from reference_luminance import ffmpeg_curve, identity_curve, reference_luminance_plan
 from stream_copy import count_video_packets
@@ -135,7 +135,7 @@ def parse_rate(value: str) -> float:
 
 
 def probe_fps(ffmpeg: str, source: Path) -> float:
-    ffprobe = Path(ffmpeg).with_name("ffprobe.exe") if Path(ffmpeg).suffix.lower() == ".exe" else Path("ffprobe")
+    ffprobe = Path(ffprobe_for(ffmpeg))
     try:
         result = subprocess.run(
             [str(ffprobe), "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=avg_frame_rate,r_frame_rate", "-of", "json", str(source)],
@@ -150,7 +150,7 @@ def probe_fps(ffmpeg: str, source: Path) -> float:
 
 
 def probe_duration(ffmpeg: str, source: Path) -> float:
-    ffprobe = Path(ffmpeg).with_name("ffprobe.exe") if Path(ffmpeg).suffix.lower() == ".exe" else Path("ffprobe")
+    ffprobe = Path(ffprobe_for(ffmpeg))
     try:
         result = subprocess.run(
             [str(ffprobe), "-v", "error", "-show_entries", "format=duration", "-of", "json", str(source)],
@@ -164,7 +164,7 @@ def probe_duration(ffmpeg: str, source: Path) -> float:
 
 
 def probe_dimensions(ffmpeg: str, source: Path) -> tuple[int, int]:
-    ffprobe = Path(ffmpeg).with_name("ffprobe.exe") if Path(ffmpeg).suffix.lower() == ".exe" else Path("ffprobe")
+    ffprobe = Path(ffprobe_for(ffmpeg))
     result = subprocess.run(
         [str(ffprobe), "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "json", str(source)],
         check=True,

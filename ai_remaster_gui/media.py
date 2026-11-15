@@ -1222,6 +1222,9 @@ def ffprobe_for_ffmpeg(ffmpeg: str) -> str:
     path = Path(ffmpeg)
     if path.suffix.lower() == ".exe":
         return str(path.with_name("ffprobe.exe"))
+    sibling = path.with_name("ffprobe")
+    if path.parent != Path(".") and sibling.exists():
+        return str(sibling)
     return "ffprobe"
 
 def _optional_float(value) -> float | None:

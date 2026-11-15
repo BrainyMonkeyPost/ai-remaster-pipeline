@@ -573,7 +573,7 @@ def prepare_devignette(
                 rate = processed / max(elapsed, 1e-6)
                 eta = (frames - processed) / rate if frames and rate > 0 else None
                 percent = f"{processed / frames * 100:5.1f}%" if frames else "  ?.?%"
-                backend = "CUDA" if gpu_processor is not None else "CPU"
+                backend = gpu_processor.device.type.upper() if gpu_processor is not None else "CPU"
                 print(
                     f"DeVignette: {processed:,}/{frames or '?'} frames ({percent}) | "
                     f"{rate:.2f} fps | elapsed {format_elapsed(elapsed)} | ETA {format_elapsed(eta)} | {backend}",
