@@ -18,6 +18,8 @@ venv/
 /tools/ComfyUI/
 /tools/ComfyUI_windows_portable/
 /tools/TransNetV2/
+/tools/uv/
+/tools/python/
 /models/
 
 # Runtime media and generated outputs
