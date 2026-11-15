@@ -231,6 +231,13 @@ fi
 
 "$PY" "$ROOT/scripts/macos_patch_gguf.py" "$CUSTOM_NODES/ComfyUI-GGUF/loader.py"
 
+# ComfyUI-MMAudio hard-codes .cuda() on four VAE buffers; drop it so they follow the module to MPS.
+MMAUDIO_VAE="$CUSTOM_NODES/ComfyUI-MMAudio/mmaudio/ext/autoencoder/vae.py"
+if [ -f "$MMAUDIO_VAE" ] && grep -q 'dtype=torch.float32).cuda())' "$MMAUDIO_VAE"; then
+  sed -i '' 's/dtype=torch\.float32)\.cuda())/dtype=torch.float32))/' "$MMAUDIO_VAE"
+  echo "Patched ComfyUI-MMAudio VAE buffers for Apple GPU."
+fi
+
 step "Installing custom node requirements"
 for node in ComfyUI-LTXVideo ComfyUI-GGUF ComfyUI-VideoHelperSuite ComfyUI_ProPainter_Nodes \
             ComfyUI-SeedVR2_VideoUpscaler ComfyUI-MMAudio ComfyUI-MiniMax-H3-PDD-Acc reference-video-colorization; do

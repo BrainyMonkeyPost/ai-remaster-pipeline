@@ -244,9 +244,9 @@ def load_models_if_needed():
     NONLOCAL_NET = WarpNet(1).to(_DEVICE).eval()
     COLOR_NET = ColorVidNet(7).to(_DEVICE).eval()
     VGG_NET = VGG19_pytorch().to(_DEVICE).eval()
-    NONLOCAL_NET.load_state_dict(torch.load(nonlocal_ckpt, map_location=_DEVICE))
-    COLOR_NET.load_state_dict(torch.load(color_ckpt, map_location=_DEVICE))
-    VGG_NET.load_state_dict(torch.load(vgg_ckpt, map_location=_DEVICE))
+    NONLOCAL_NET.load_state_dict(torch.load(nonlocal_ckpt, map_location="cpu"))  # ARP: CUDA/float64 checkpoints; load_state_dict moves them to the device
+    COLOR_NET.load_state_dict(torch.load(color_ckpt, map_location="cpu"))  # ARP: CUDA/float64 checkpoints; load_state_dict moves them to the device
+    VGG_NET.load_state_dict(torch.load(vgg_ckpt, map_location="cpu"))  # ARP: CUDA/float64 checkpoints; load_state_dict moves them to the device
     MODELS_LOADED = True
     print("[DeepExemplar] Models loaded successfully.")
 

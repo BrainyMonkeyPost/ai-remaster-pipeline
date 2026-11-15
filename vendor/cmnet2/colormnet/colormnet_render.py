@@ -188,7 +188,7 @@ class ColorMNetRender:
 
         # Model setup
         self.network = ColorMNet(self.config, self.config['model']).to(DEVICE).eval()
-        self.model_weights = torch.load(self.config['model'], map_location=DEVICE)
+        self.model_weights = torch.load(self.config['model'], map_location="cpu")  # ARP: CUDA-saved checkpoint
         self.network.load_weights(self.model_weights, init_as_zero_if_needed=True)
         self.vid_length = vid_length
         self.config['enable_long_term_count_usage'] = (

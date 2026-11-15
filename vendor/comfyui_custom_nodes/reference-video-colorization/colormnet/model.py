@@ -90,7 +90,7 @@ class ColorMNetModel:
             # Load weights
             model_weights = torch.load(
                 checkpoint_path,
-                map_location=self.device_manager.device
+                map_location="cpu",  # ARP: checkpoint was saved on CUDA; load_weights copies onto the device
             )
             self._model.load_weights(model_weights, init_as_zero_if_needed=True)
 

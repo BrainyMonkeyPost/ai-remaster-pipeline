@@ -43,6 +43,10 @@ if [ "$(uname -s)" = "Darwin" ]; then
   export PATH
   # Let ComfyUI fall back to the CPU for the few PyTorch ops Metal (MPS) lacks.
   export PYTORCH_ENABLE_MPS_FALLBACK="${PYTORCH_ENABLE_MPS_FALLBACK:-1}"
+  # If ~/.cache isn't writable (e.g. created by sudo), keep PyTorch's downloads inside ARP.
+  if [ -e "$HOME/.cache" ] && [ ! -w "$HOME/.cache" ] && [ -z "${TORCH_HOME:-}" ]; then
+    export TORCH_HOME="$ROOT/.cache/torch"
+  fi
 fi
 if [ -x "$ROOT/.venv/bin/python" ]; then
   PY="$ROOT/.venv/bin/python"
