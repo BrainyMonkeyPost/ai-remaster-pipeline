@@ -65,6 +65,26 @@ window. Models download the first time a stage needs them.
 * The status bar shows **GPU: MPS** instead of a CUDA compute capability.
 * The Mac is kept awake with `caffeinate` while a stage runs.
 
+## Measured on an M2 Ultra (128 GB)
+
+Times for a 3-second 4:3 test clip unless noted.
+
+| Stage | Time |
+|---|---|
+| Stabilization (6 s clip) | 15 s |
+| Clean Up with DeVignette (6 s clip) | 11 s |
+| Shot Detection (6 s clip) | 1 s |
+| Qwen reference still | about 2 min each |
+| Deep Exemplar / ColorMNet / CMNET2 (6 s clip) | 15 s / 32 s / 50 s |
+| Recomposition (6 s clip) | 3 s |
+| Outpainting to 16:9 (LTX 2.3, 1280x704) | about 23 min, so roughly 7-8 h per minute of footage |
+| LTX Colorizer | about 8 min plus model loading |
+| Sound effects (MMAudio, 6 s clip) | 30 s |
+| SeedVR2 upscale to 4K (6 s clip) | almost 2 h; use another upscaler or RunPod |
+
+ARP starts ComfyUI with `--use-pytorch-cross-attention` on a Mac, which was about 8% faster.
+The fp8 LTX checkpoint also works on the Apple GPU (ComfyUI converts it to bf16 as it runs).
+
 ## Stage by stage
 
 | Stage | On a Mac | Notes |
