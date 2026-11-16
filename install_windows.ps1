@@ -7,7 +7,8 @@
     [switch]$SkipDeepExemplar,
     [switch]$SkipComfyManager,
     [switch]$InstallCorrelationExtension,
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$NoManagedPython
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,6 +29,8 @@ $BundledCustomNodes = Join-Path $Root 'vendor\comfyui_custom_nodes'
 $UseExistingComfy = $false
 $ComfyManagedByArp = $true
 $ResolvedPythonLauncher = $null
+$ManagedUvDir = Join-Path $Root 'tools\uv'
+$ManagedPythonDir = Join-Path $Root 'tools\python'
 $PythonLauncherFailures = @()
 
 function Get-ArpVersion {
@@ -461,6 +464,71 @@ function Show-PythonInstallPrompt {
     }
 }
 
+function Get-ManagedUv {
+    $onPath = Get-Command 'uv' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($onPath) {
+        return $onPath.Source
+    }
+    $uvExe = Join-Path $ManagedUvDir 'uv.exe'
+    if (Test-Path -LiteralPath $uvExe) {
+        return $uvExe
+    }
+    $url = 'https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip'
+    $archiveDir = Join-Path $Root '.cache\downloads'
+    $archive = Join-Path $archiveDir 'uv-x86_64-pc-windows-msvc.zip'
+    Ensure-Directory $archiveDir
+    Ensure-Directory $ManagedUvDir
+    Write-Host "Downloading uv from $url"
+    Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        foreach ($entry in $zip.Entries) {
+            if ([System.IO.Path]::GetFileName($entry.FullName) -ieq 'uv.exe') {
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $uvExe, $true)
+            }
+        }
+    } finally {
+        $zip.Dispose()
+    }
+    Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path -LiteralPath $uvExe)) {
+        throw "Could not extract uv.exe from $url"
+    }
+    Write-Host "Installed uv: $uvExe"
+    return $uvExe
+}
+
+function Install-ManagedPython {
+    # Python 3.13 goes into this repo's tools\python folder, so the .venv built from it
+    # does not depend on, or interfere with, any other Python on the machine.
+    Write-Host ''
+    Write-Host "No usable Python 3.13 was found. Installing a private copy for ARP into $ManagedPythonDir" -ForegroundColor Yellow
+    $uv = Get-ManagedUv
+    $oldInstallDir = $env:UV_PYTHON_INSTALL_DIR
+    try {
+        $env:UV_PYTHON_INSTALL_DIR = $ManagedPythonDir
+        Invoke-External -Command @($uv, 'python', 'install', '3.13')
+        $result = Invoke-CapturedProcess -FilePath $uv -Arguments @('python', 'find', '--managed-python', '3.13')
+        if ($result.ExitCode -ne 0) {
+            # Older uv releases on PATH predate --managed-python.
+            $result = Invoke-CapturedProcess -FilePath $uv -Arguments @('python', 'find', '--python-preference', 'only-managed', '3.13')
+        }
+    } finally {
+        $env:UV_PYTHON_INSTALL_DIR = $oldInstallDir
+    }
+    $pythonExe = (($result.Stdout -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -First 1)
+    if ($result.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($pythonExe)) {
+        throw "uv installed Python 3.13 but could not locate it: $(($result.Stdout, $result.Stderr) -join ' ')"
+    }
+    $check = Get-PythonLauncherCheck @($pythonExe)
+    if (-not $check.Success) {
+        throw "The Python installed by uv is not usable: $($check.Reason)"
+    }
+    Write-Host "Using ARP-managed Python: $pythonExe"
+    return @($pythonExe)
+}
+
 function Resolve-PythonLauncher {
     $requested = Convert-PythonLauncherArgument $PythonLauncher
     if (-not $requested -or $requested.Count -eq 0) {
@@ -473,10 +541,21 @@ function Resolve-PythonLauncher {
         Add-PythonLauncherCandidate $candidates @('python')
     }
 
+    # Only fetch Python automatically for the default launcher; an explicit -PythonLauncher
+    # that does not work is more likely a wrong path the user should hear about.
+    $triedManagedPython = (($requested -join ' ') -ne 'py -3.13')
     while ($true) {
         $launcher = Find-PythonLauncher $candidates
         if ($launcher) {
             return $launcher
+        }
+        if (-not $NoManagedPython -and -not $triedManagedPython) {
+            $triedManagedPython = $true
+            try {
+                return Install-ManagedPython
+            } catch {
+                Write-Host "Could not install Python 3.13 automatically: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
         }
         if ($NonInteractive) {
             throw "Could not find Python 3.13. Install Python 3.13 from https://www.python.org/downloads/ with the Python Launcher option enabled, or rerun with -PythonLauncher pointing at a Python 3.13 executable."
@@ -1033,7 +1112,7 @@ function Assert-PipelinePythonCompatible {
     }
     $check = Get-PythonLauncherCheck @($PipelinePython)
     if (-not $check.Success) {
-        throw "The existing installer virtual environment is not compatible: $($check.Reason). Delete '$Root\.venv', install standard 64-bit CPython 3.13, and rerun install_windows.bat."
+        throw "The existing installer virtual environment is not compatible: $($check.Reason). Delete '$Root\.venv' and rerun install_windows.bat; it will install Python 3.13 for you if it cannot find one."
     }
     Write-Host "Installer Python check: $($check.Reason)"
 }

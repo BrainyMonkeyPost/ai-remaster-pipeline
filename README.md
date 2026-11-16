@@ -16,7 +16,7 @@ Alpha software. Windows + NVIDIA is the supported path.
 
 | | |
 |---|---|
-| **Needs** | Windows, NVIDIA GPU (24 GB recommended, 16 GB minimum), 64 GB RAM recommended, Python 3.13, Git, 150-250 GB free disk |
+| **Needs** | Windows, NVIDIA GPU (24 GB recommended, 16 GB minimum), 64 GB RAM recommended, Python 3.13 (the installer fetches a private copy with uv if it cannot find one), Git, 150-250 GB free disk |
 | **Install** | `install_windows.bat` (creates `.venv`, local FFmpeg, and a managed ComfyUI in `tools\comfyui`) |
 | **Launch** | `launch_gui.bat` (macOS/Linux: `./launch_gui.sh`). The GUI starts ComfyUI in its own console if it isn't running. |
 | **Update** | `git pull`, then re-run `install_windows.bat` (keeps models and outputs) |
